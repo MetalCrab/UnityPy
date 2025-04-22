@@ -246,6 +246,50 @@ def decompress_lzham(data: ByteString, uncompressed_size: int) -> bytes:
     )
 
 
+# ARKNIGHTS CUSTOM https://github.com/MooncellWiki/UnityPy
+def decompress_lz4_ak(data: ByteString, uncompressed_size: int):
+    def read_long_length_no_check(ip: bytearray, pos: int) -> tuple[int, int]:
+        b = 0
+        l = 0
+        while True:
+            b = ip[pos]
+            pos += 1
+            l += b
+            if b != 255:
+                break
+        return l, pos
+        
+    ip = 0
+    op = 0
+    AK_LITERAL_LENGTH_MASK = ((1 << 4) - 1) & 0xFF
+    AK_MATCH_LENGTH_MASK = (~AK_LITERAL_LENGTH_MASK) & 0xFF
+    fixed_compressed_data = bytearray(data)
+    while True:
+        literal_length, match_length = (
+            fixed_compressed_data[ip] & AK_LITERAL_LENGTH_MASK,
+            (fixed_compressed_data[ip] & AK_MATCH_LENGTH_MASK) >> 4 & 0xff,
+        )
+        fixed_compressed_data[ip] = (literal_length << 4 | match_length) & 0xFF
+        ip += 1
+        if literal_length == 15:
+            l, ip = read_long_length_no_check(fixed_compressed_data, ip)
+            literal_length += l
+        op += literal_length
+        ip += literal_length
+        if uncompressed_size == op:  # MFLIMIT end of block
+            break
+        offset = fixed_compressed_data[ip + 1] | fixed_compressed_data[ip] << 8
+        fixed_compressed_data[ip] = offset & 0xFF
+        fixed_compressed_data[ip + 1] = (offset >> 8) & 0xFF
+        ip += 2
+        if match_length == 15:
+            m, ip = read_long_length_no_check(fixed_compressed_data, ip)
+            match_length += m
+        match_length += 4  # MINMATCH
+        op += match_length
+    return decompress_lz4(bytes(fixed_compressed_data), uncompressed_size)
+
+
 DECOMPRESSION_MAP: Dict[
     Union[int, CompressionFlags], Callable[[ByteString, int], ByteString]
 ] = {
@@ -253,7 +297,9 @@ DECOMPRESSION_MAP: Dict[
     CompressionFlags.LZMA: lambda cd, _ucs: decompress_lzma(cd),
     CompressionFlags.LZ4: decompress_lz4,
     CompressionFlags.LZ4HC: decompress_lz4,
-    CompressionFlags.LZHAM: decompress_lzham,
+    # CompressionFlags.LZHAM: decompress_lzham,
+    CompressionFlags.COMPRESSION_4: decompress_lz4_ak,
+    CompressionFlags.COMPRESSION_5: decompress_lz4_ak,
 }
 
 COMPRESSION_MAP: Dict[

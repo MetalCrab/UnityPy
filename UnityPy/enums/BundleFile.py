@@ -6,7 +6,9 @@ class CompressionFlags(IntFlag):
     LZMA = 1
     LZ4 = 2
     LZ4HC = 3
-    LZHAM = 4
+    # LZHAM = 4
+    COMPRESSION_4 = 4
+    COMPRESSION_5 = 5
 
 
 class ArchiveFlagsOld(IntFlag):
